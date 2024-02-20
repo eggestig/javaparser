@@ -90,16 +90,20 @@ class JavadocParser {
 
     private static List<String> cleanLines(String content) {
         String[] lines = content.split(SYSTEM_EOL);
+        //Condition 1: if (lines.length == 0)
         if (lines.length == 0) {
             return Collections.emptyList();
         }
         List<String> cleanedLines = Arrays.stream(lines).map(l -> {
             int asteriskIndex = startsWithAsterisk(l);
+            //Condition 2: if (asteriskIndex == -1)
             if (asteriskIndex == -1) {
                 return l;
             }
+            //Condition 3: if (l.length() > (asteriskIndex + 1))
             if (l.length() > (asteriskIndex + 1)) {
                     char c = l.charAt(asteriskIndex + 1);
+                    //Condition 4 & 5: if (c == ' ' || c == '\t')
                     if (c == ' ' || c == '\t') {
                         return l.substring(asteriskIndex + 2);
                     }
@@ -107,19 +111,35 @@ class JavadocParser {
             return l.substring(asteriskIndex + 1);
         }).collect(Collectors.toList());
         // lines containing only whitespace are normalized to empty lines
+        //Condition 6: l.trim().isEmpty() ? "" : l)
         cleanedLines = cleanedLines.stream().map(l -> l.trim().isEmpty() ? "" : l).collect(Collectors.toList());
         // if the first starts with a space, remove it
+        //Condition 7 & 8 & 9: !cleanedLines.get(0).isEmpty() && (cleanedLines.get(0).charAt(0) == ' ' || cleanedLines.get(0).charAt(0) == '\t'))
         if (!cleanedLines.get(0).isEmpty() && (cleanedLines.get(0).charAt(0) == ' ' || cleanedLines.get(0).charAt(0) == '\t')) {
             cleanedLines.set(0, cleanedLines.get(0).substring(1));
         }
         // drop empty lines at the beginning and at the end
+        //Condition 10 & 11: while (cleanedLines.size() > 0 && cleanedLines.get(0).trim().isEmpty())
         while (cleanedLines.size() > 0 && cleanedLines.get(0).trim().isEmpty()) {
             cleanedLines = cleanedLines.subList(1, cleanedLines.size());
         }
+        //Condition 12 & 13: while (cleanedLines.size() > 0 && cleanedLines.get(cleanedLines.size() - 1).trim().isEmpty())
         while (cleanedLines.size() > 0 && cleanedLines.get(cleanedLines.size() - 1).trim().isEmpty()) {
             cleanedLines = cleanedLines.subList(0, cleanedLines.size() - 1);
         }
         return cleanedLines;
+        /**
+        Condition 1: if (lines.length == 0)
+        Condition 2: if (asteriskIndex == -1)
+        Condition 3: if (l.length() > (asteriskIndex + 1))
+        Condition 4 & 5: if (c == ' ' || c == '\t')
+        Condition 6: l.trim().isEmpty()
+        Condition 7 & 8 & 9: !cleanedLines.get(0).isEmpty() && (cleanedLines.get(0).charAt(0) == ' ' || cleanedLines.get(0).charAt(0) == '\t'))
+        Condition 10 & 11: while (cleanedLines.size() > 0 && cleanedLines.get(0).trim().isEmpty())
+        Condition 12 & 13: while (cleanedLines.size() > 0 && cleanedLines.get(cleanedLines.size() - 1).trim().isEmpty())
+
+        NNC = PredicateNodes(#Conditions) + 1 = 14
+         */
     }
 
     // Visible for testing
