@@ -443,53 +443,69 @@ public abstract class ResolvedReferenceType implements ResolvedType, ResolvedTyp
         if (other.equals(this)) {
             return true;
         }
-        if (this.getQualifiedName().equals(other.getQualifiedName())) {
-            if (this.isRawType() || other.isRawType()) {
-                return true;
-            }
-            List<ResolvedType> typeParametersValues = typeParametersValues();
-            if (typeParametersValues.size() != other.typeParametersValues().size()) {
-                throw new IllegalStateException();
-            }
-            for (int i = 0; i < typeParametersValues.size(); i++) {
-                ResolvedType thisParam = typeParametersValues.get(i);
-                ResolvedType otherParam = other.typeParametersValues().get(i);
-                if (!thisParam.equals(otherParam)) {
-                    if (thisParam instanceof ResolvedWildcard) {
-                        ResolvedWildcard thisParamAsWildcard = (ResolvedWildcard) thisParam;
-                        if (thisParamAsWildcard.isSuper() && otherParam.isAssignableBy(thisParamAsWildcard.getBoundedType())) {
-                            // ok
-                        } else if (thisParamAsWildcard.isExtends() && thisParamAsWildcard.getBoundedType().isAssignableBy(otherParam)) {
-                            // ok
-                        } else if (!thisParamAsWildcard.isBounded()) {
-                            // ok
-                        } else {
-                            return false;
-                        }
-                    } else {
-                        if (thisParam instanceof ResolvedTypeVariable && otherParam instanceof ResolvedTypeVariable) {
-                            List<ResolvedType> thisBounds = thisParam.asTypeVariable().asTypeParameter().getBounds().stream().map(ResolvedTypeParameterDeclaration.Bound::getType).collect(Collectors.toList());
-                            List<ResolvedType> otherBounds = otherParam.asTypeVariable().asTypeParameter().getBounds().stream().map(ResolvedTypeParameterDeclaration.Bound::getType).collect(Collectors.toList());
-                            return thisBounds.size() == otherBounds.size() && otherBounds.containsAll(thisBounds);
-                        }
-                                            if (!(thisParam instanceof ResolvedTypeVariable) && otherParam instanceof ResolvedTypeVariable) {
-                            return compareConsideringVariableTypeParameters(thisParam, (ResolvedTypeVariable) otherParam);
-                        }
-                        if (thisParam instanceof ResolvedTypeVariable && !(otherParam instanceof ResolvedTypeVariable)) {
-                            return compareConsideringVariableTypeParameters(otherParam, (ResolvedTypeVariable) thisParam);
-                        }
-                        return false;
-                    }
-                }
-            }
+        if (!this.getQualifiedName().equals(other.getQualifiedName())) {
+            return false;
+        }
+        if (this.isRawType() || other.isRawType()) {
             return true;
         }
-        return false;
+        if (typeParametersValues().size() != other.typeParametersValues().size()) {
+            throw new IllegalStateException();
+        }
+        // Compare each parameter
+        for (int i = 0; i < typeParametersValues().size(); i++) {
+            if(!compareConsideringTypeParameter(typeParametersValues().get(i), other.typeParametersValues().get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     //
     // Private methods
     //
+    private boolean compareConsideringTypeParameter(ResolvedType thisParam, ResolvedType otherParam) {
+        if ((thisParam).equals(otherParam)) {
+            return true;
+        }
+        if (thisParam instanceof ResolvedWildcard) {
+            if(!compareConsideringVariableTypeWildcardParameter((ResolvedWildcard) thisParam, otherParam)) {
+                return false;
+            }
+        } else {
+            if(!compareConsideringVariableTypeInstanceParameter(thisParam, otherParam)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    private boolean compareConsideringVariableTypeWildcardParameter(ResolvedWildcard thisParam, ResolvedType otherParam) {
+        ResolvedWildcard thisParamAsWildcard = (ResolvedWildcard) thisParam;
+        if(thisParamAsWildcard.isSuper() && otherParam.isAssignableBy(thisParamAsWildcard.getBoundedType())) {
+            return true;
+        }
+        if(thisParamAsWildcard.isExtends() && thisParamAsWildcard.getBoundedType().isAssignableBy(otherParam)) {
+            return true;
+        }
+        if(!thisParamAsWildcard.isBounded()) {
+            return true;
+        }
+        return false;
+    }
+    private boolean compareConsideringVariableTypeInstanceParameter(ResolvedType thisParam, ResolvedType otherParam) {
+        if (thisParam instanceof ResolvedTypeVariable && otherParam instanceof ResolvedTypeVariable) {
+            List<ResolvedType> thisBounds = thisParam.asTypeVariable().asTypeParameter().getBounds().stream().map(ResolvedTypeParameterDeclaration.Bound::getType).collect(Collectors.toList());
+            List<ResolvedType> otherBounds = otherParam.asTypeVariable().asTypeParameter().getBounds().stream().map(ResolvedTypeParameterDeclaration.Bound::getType).collect(Collectors.toList());
+            return thisBounds.size() == otherBounds.size() && otherBounds.containsAll(thisBounds);
+        }
+        if (!(thisParam instanceof ResolvedTypeVariable) && otherParam instanceof ResolvedTypeVariable) {
+            return compareConsideringVariableTypeParameters(thisParam, (ResolvedTypeVariable) otherParam);
+        }
+        if (thisParam instanceof ResolvedTypeVariable && !(otherParam instanceof ResolvedTypeVariable)) {
+            return compareConsideringVariableTypeParameters(otherParam, (ResolvedTypeVariable) thisParam);
+        }
+        return false;
+    }
     private boolean compareConsideringVariableTypeParameters(ResolvedType referenceType, ResolvedTypeVariable typeVariable) {
         // verify if the ResolvedTypeVariable has only one type variable and the bound is
         // not a reference type with a bound parameter
