@@ -25,6 +25,7 @@ import com.github.javaparser.javadoc.Javadoc;
 import com.github.javaparser.javadoc.JavadocBlockTag;
 import com.github.javaparser.javadoc.description.JavadocDescription;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -90,36 +91,70 @@ class JavadocParser {
 
     private static List<String> cleanLines(String content) {
         String[] lines = content.split(SYSTEM_EOL);
+
         if (lines.length == 0) {
             return Collections.emptyList();
         }
-        List<String> cleanedLines = Arrays.stream(lines).map(l -> {
-            int asteriskIndex = startsWithAsterisk(l);
-            if (asteriskIndex == -1) {
-                return l;
-            }
-            if (l.length() > (asteriskIndex + 1)) {
-                    char c = l.charAt(asteriskIndex + 1);
-                    if (c == ' ' || c == '\t') {
-                        return l.substring(asteriskIndex + 2);
-                    }
-                }
-            return l.substring(asteriskIndex + 1);
-        }).collect(Collectors.toList());
-        // lines containing only whitespace are normalized to empty lines
-        cleanedLines = cleanedLines.stream().map(l -> l.trim().isEmpty() ? "" : l).collect(Collectors.toList());
-        // if the first starts with a space, remove it
-        if (!cleanedLines.get(0).isEmpty() && (cleanedLines.get(0).charAt(0) == ' ' || cleanedLines.get(0).charAt(0) == '\t')) {
-            cleanedLines.set(0, cleanedLines.get(0).substring(1));
+
+        List<String> cleanedLines = processLines(lines);
+        cleanedLines = normalizeWhitespace(cleanedLines);
+
+        if (!cleanedLines.isEmpty() && startsWithWhitespace(cleanedLines.get(0))) {
+            removeLeadingWhitespace(cleanedLines);
         }
-        // drop empty lines at the beginning and at the end
-        while (cleanedLines.size() > 0 && cleanedLines.get(0).trim().isEmpty()) {
-            cleanedLines = cleanedLines.subList(1, cleanedLines.size());
-        }
-        while (cleanedLines.size() > 0 && cleanedLines.get(cleanedLines.size() - 1).trim().isEmpty()) {
-            cleanedLines = cleanedLines.subList(0, cleanedLines.size() - 1);
-        }
+
+        removeEmptyLines(cleanedLines);
+
         return cleanedLines;
+    }
+
+    private static List<String> processLines(String[] lines) {
+        List<String> processedLines = new ArrayList<>();
+
+        for (String line : lines) {
+            int asteriskIndex = startsWithAsterisk(line);
+
+            if (asteriskIndex == -1) {
+                processedLines.add(line);
+            } else {
+                processedLines.add(getProcessedSubstring(line, asteriskIndex));
+            }
+        }
+
+        return processedLines;
+    }
+
+    private static String getProcessedSubstring(String line, int asteriskIndex) {
+        if (line.length() > (asteriskIndex + 1)) {
+            char c = line.charAt(asteriskIndex + 1);
+            if (c == ' ' || c == '\t') {
+                return line.substring(asteriskIndex + 2);
+            }
+        }
+
+        return line.substring(asteriskIndex + 1);
+    }
+
+    private static List<String> normalizeWhitespace(List<String> lines) {
+        return lines.stream().map(l -> l.trim().isEmpty() ? "" : l).collect(Collectors.toList());
+    }
+
+    private static boolean startsWithWhitespace(String line) {
+        return !line.isEmpty() && (line.charAt(0) == ' ' || line.charAt(0) == '\t');
+    }
+
+    private static void removeLeadingWhitespace(List<String> lines) {
+        lines.set(0, lines.get(0).substring(1));
+    }
+
+    private static void removeEmptyLines(List<String> lines) {
+        while (!lines.isEmpty() && lines.get(0).trim().isEmpty()) {
+            lines = lines.subList(1, lines.size());
+        }
+
+        while (!lines.isEmpty() && lines.get(lines.size() - 1).trim().isEmpty()) {
+            lines = lines.subList(0, lines.size() - 1);
+        }
     }
 
     // Visible for testing
