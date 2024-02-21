@@ -25,6 +25,9 @@ import com.github.javaparser.javadoc.Javadoc;
 import com.github.javaparser.javadoc.JavadocBlockTag;
 import com.github.javaparser.javadoc.description.JavadocDescription;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -38,6 +41,8 @@ import static com.github.javaparser.utils.Utils.*;
  * <a href="https://docs.oracle.com/javase/1.5.0/docs/tooldocs/windows/javadoc.html">The Javadoc specification.</a>
  */
 class JavadocParser {
+
+    static int[] coverage = new int[7];
 
     private static String BLOCK_TAG_PREFIX = "@";
 
@@ -88,19 +93,41 @@ class JavadocParser {
         return string;
     }
 
+
+    private static void writeToFile(int[] flags) {
+        // Create a StringBuilder to store the flags
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < flags.length; i++) {
+            sb.append(flags[i]);
+        }
+        // Create a buffer writer to write the flags to a file
+        BufferedWriter writer = null;
+        try {
+            writer = new BufferedWriter(new FileWriter("flags_javadoc.txt"));
+            writer.write(sb.toString());
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private static List<String> cleanLines(String content) {
         String[] lines = content.split(SYSTEM_EOL);
         if (lines.length == 0) {
+            coverage[0] = 1;
             return Collections.emptyList();
         }
         List<String> cleanedLines = Arrays.stream(lines).map(l -> {
             int asteriskIndex = startsWithAsterisk(l);
             if (asteriskIndex == -1) {
+                coverage[1] = 1;
                 return l;
             }
             if (l.length() > (asteriskIndex + 1)) {
+                    coverage[2] = 1;
                     char c = l.charAt(asteriskIndex + 1);
                     if (c == ' ' || c == '\t') {
+                        coverage[3] = 1;
                         return l.substring(asteriskIndex + 2);
                     }
                 }
@@ -110,15 +137,20 @@ class JavadocParser {
         cleanedLines = cleanedLines.stream().map(l -> l.trim().isEmpty() ? "" : l).collect(Collectors.toList());
         // if the first starts with a space, remove it
         if (!cleanedLines.get(0).isEmpty() && (cleanedLines.get(0).charAt(0) == ' ' || cleanedLines.get(0).charAt(0) == '\t')) {
+            coverage[4] = 1;
             cleanedLines.set(0, cleanedLines.get(0).substring(1));
         }
         // drop empty lines at the beginning and at the end
         while (cleanedLines.size() > 0 && cleanedLines.get(0).trim().isEmpty()) {
+            coverage[5] = 1;
             cleanedLines = cleanedLines.subList(1, cleanedLines.size());
         }
         while (cleanedLines.size() > 0 && cleanedLines.get(cleanedLines.size() - 1).trim().isEmpty()) {
+            coverage[6] = 1;
             cleanedLines = cleanedLines.subList(0, cleanedLines.size() - 1);
         }
+
+        writeToFile(coverage);
         return cleanedLines;
     }
 
