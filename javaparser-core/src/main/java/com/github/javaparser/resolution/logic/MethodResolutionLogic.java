@@ -295,69 +295,68 @@ public class MethodResolutionLogic {
     }
 
     private static boolean isAssignableMatchTypeParametersMatchingQName(ResolvedReferenceType expected, ResolvedReferenceType actual,
-                                                                        Map<String, ResolvedType> matchedParameters) {
+    Map<String, ResolvedType> matchedParameters) {
+        if (!checkQualifiedNames(expected, actual)) {
+        return false;
+        }
 
-        if (!expected.getQualifiedName().equals(actual.getQualifiedName())) {
-            return false;
+        if (!checkTypeParameterSizes(expected, actual)) {
+        throw new UnsupportedOperationException();
         }
-        if (expected.typeParametersValues().size() != actual.typeParametersValues().size()) {
-            throw new UnsupportedOperationException();
-            //return true;
-        }
+
         for (int i = 0; i < expected.typeParametersValues().size(); i++) {
-            ResolvedType expectedParam = expected.typeParametersValues().get(i);
-            ResolvedType actualParam = actual.typeParametersValues().get(i);
+        ResolvedType expectedParam = expected.typeParametersValues().get(i);
+        ResolvedType actualParam = actual.typeParametersValues().get(i);
 
-            // In the case of nested parameterizations eg. List<R> <-> List<Integer>
-            // we should peel off one layer and ensure R <-> Integer
-            if (expectedParam.isReferenceType() && actualParam.isReferenceType()) {
-                ResolvedReferenceType r1 = expectedParam.asReferenceType();
-                ResolvedReferenceType r2 = actualParam.asReferenceType();
-                // we can have r1=A and r2=A.B (with B extends A and B is an inner class of A)
-                // in this case we want to verify expected parameter from the actual parameter ancestors
-                return isAssignableMatchTypeParameters(r1, r2, matchedParameters);
-            }
-
-            if (expectedParam.isArray() && actualParam.isArray()) {
-                ResolvedType r1 = expectedParam.asArrayType().getComponentType();
-                ResolvedType r2 = actualParam.asArrayType().getComponentType();
-                // try to verify the component type of each array
-                return isAssignableMatchTypeParameters(r1, r2, matchedParameters);
-            }
-
-            if (expectedParam.isTypeVariable()) {
-                String expectedParamName = expectedParam.asTypeParameter().getName();
-                if (!actualParam.isTypeVariable() || !actualParam.asTypeParameter().getName().equals(expectedParamName)) {
-                    return matchTypeVariable(expectedParam.asTypeVariable(), actualParam, matchedParameters);
-                }
-                // actualParam is a TypeVariable and actualParam has the same name as expectedParamName
-                // We should definitely consider that types are assignable
-                return true;
-            } else if (expectedParam.isReferenceType()) {
-                if (actualParam.isTypeVariable()) {
-                    return matchTypeVariable(actualParam.asTypeVariable(), expectedParam, matchedParameters);
-                }
-                if (!expectedParam.equals(actualParam)) {
-                    return false;
-                }
-            }
-            if (expectedParam.isWildcard()) {
-                if (expectedParam.asWildcard().isExtends()) {
-                	// trying to compare with unbounded wildcard type parameter <?>
-                	if (actualParam.isWildcard() && !actualParam.asWildcard().isBounded()) {
-                		return true;
-                	}
-                	if (actualParam.isTypeVariable()) {
-                        return matchTypeVariable(actualParam.asTypeVariable(), expectedParam.asWildcard().getBoundedType(), matchedParameters);
-                    }
-                    return isAssignableMatchTypeParameters(expectedParam.asWildcard().getBoundedType(), actualParam, matchedParameters);
-                }
-                // TODO verify super bound
-                return true;
-            }
+        if (!isAssignableReferenceType(expectedParam, actualParam, matchedParameters) &&
+        !isAssignableArrayType(expectedParam, actualParam, matchedParameters) &&
+        !isAssignableTypeVariable(expectedParam, actualParam, matchedParameters)) {
+            // Handle other cases...
             throw new UnsupportedOperationException(expectedParam.describe());
+            }
         }
+
         return true;
+        }
+
+    private static boolean checkQualifiedNames(ResolvedReferenceType expected, ResolvedReferenceType actual) {
+        return expected.getQualifiedName().equals(actual.getQualifiedName());
+    }
+
+    private static boolean checkTypeParameterSizes(ResolvedReferenceType expected, ResolvedReferenceType actual) {
+        return expected.typeParametersValues().size() == actual.typeParametersValues().size();
+    }
+
+    private static boolean isAssignableReferenceType(ResolvedType expectedParam, ResolvedType actualParam,
+                                                    Map<String, ResolvedType> matchedParameters) {
+        if (expectedParam.isReferenceType() && actualParam.isReferenceType()) {
+            ResolvedReferenceType r1 = expectedParam.asReferenceType();
+            ResolvedReferenceType r2 = actualParam.asReferenceType();
+            return isAssignableMatchTypeParameters(r1, r2, matchedParameters);
+        }
+        return false;
+    }
+
+    private static boolean isAssignableArrayType(ResolvedType expectedParam, ResolvedType actualParam,
+                                                Map<String, ResolvedType> matchedParameters) {
+        if (expectedParam.isArray() && actualParam.isArray()) {
+            ResolvedType r1 = expectedParam.asArrayType().getComponentType();
+            ResolvedType r2 = actualParam.asArrayType().getComponentType();
+            return isAssignableMatchTypeParameters(r1, r2, matchedParameters);
+        }
+        return false;
+    }
+
+    private static boolean isAssignableTypeVariable(ResolvedType expectedParam, ResolvedType actualParam,
+                                                    Map<String, ResolvedType> matchedParameters) {
+        if (expectedParam.isTypeVariable()) {
+            String expectedParamName = expectedParam.asTypeParameter().getName();
+            if (!actualParam.isTypeVariable() || !actualParam.asTypeParameter().getName().equals(expectedParamName)) {
+                return matchTypeVariable(expectedParam.asTypeVariable(), actualParam, matchedParameters);
+            }
+            return true;
+        }
+        return false;
     }
 
     private static boolean matchTypeVariable(ResolvedTypeVariable typeVariable, ResolvedType type, Map<String, ResolvedType> matchedParameters) {
