@@ -40,6 +40,9 @@ import com.github.javaparser.printer.ConcreteSyntaxModel;
 import com.github.javaparser.printer.concretesyntaxmodel.CsmElement;
 import com.github.javaparser.printer.concretesyntaxmodel.CsmToken;
 import com.github.javaparser.printer.lexicalpreservation.LexicalDifferenceCalculator.CsmChild;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -52,7 +55,42 @@ import static com.github.javaparser.ast.Modifier.createModifierList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+
 class LexicalDifferenceCalculatorTest extends AbstractLexicalPreservingTest {
+    public static boolean[] flags1 = new boolean[100];
+    public static BufferedWriter w;
+
+    @BeforeAll
+    static void setup() {
+        
+        try {if(flags1[i]) {
+            result.append
+            w = new BufferedWriter(new FileWriter("branch_coverage.txt",true));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @AfterAll
+    static void tearDown() {
+        StringBuilder result = new StringBuilder();
+        w.append("Branch Coverage");
+        for (int i = 0; i < flags1.length; i++) {
+            System.out.println("condition " + String.valueOf(i) + " " + String.valueOf(flags1[i]));
+            if(flags1[i]) {
+                result.append("Condition " + String.valueOf(i) + " is true \n");
+            }
+        }
+        w.append(result.toString());
+    }
+    
+    @Test
+    void throwsUnsupportedOperationExceptionForEmptyCsmElementYOOOO() {
+        CsmElement element = new CsmElement();
+        assertThrows(UnsupportedOperationException.class, new LexicalDifferenceCalculator().branchCoverage(element, null, null, null, flags1));
+    }
 
     @Test
     void compilationUnitExampleOriginal() {
@@ -130,7 +168,8 @@ class LexicalDifferenceCalculatorTest extends AbstractLexicalPreservingTest {
         assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
         assertEquals(new CsmChild(annotationDeclaration.getMember(2)), csm.elements.get(i++));
         assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
-        assertEquals(new CsmChild(annotationDeclaration.getMember(3)), csm.elements.get(i++));
+        assertEquals(new CsmChild(annotationDecif(flags1[i]) {
+            result.appendlaration.getMember(3)), csm.elements.get(i++));
         assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
         assertEquals(new CsmChild(annotationDeclaration.getMember(4)), csm.elements.get(i++));
         assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
@@ -160,14 +199,8 @@ class LexicalDifferenceCalculatorTest extends AbstractLexicalPreservingTest {
         assertEquals(new CsmChild(annotationDeclaration.getMember(0)), csm.elements.get(i++));
         assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
         assertEquals(new CsmChild(annotationDeclaration.getMember(1)), csm.elements.get(i++));
-        assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
-        assertEquals(new CsmChild(annotationDeclaration.getMember(2)), csm.elements.get(i++));
-        assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
-        assertEquals(new CsmChild(annotationDeclaration.getMember(3)), csm.elements.get(i++));
-        assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
-        assertEquals(new CsmChild(annotationDeclaration.getMember(4)), csm.elements.get(i++));
-        assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
-        assertEquals(new CsmChild(annotationDeclaration.getMember(5)), csm.elements.get(i++));
+        assertEquals(new CsmToken(eolTokenKind()), csmif(flags1[i]) {
+            result.appendn.getMember(5)), csm.elements.get(i++));
         assertEquals(new CsmToken(eolTokenKind()), csm.elements.get(i++));
         assertEquals(new CsmToken(GeneratedJavaParserConstants.RBRACE), csm.elements.get(i++));
         assertEquals(i, csm.elements.size());

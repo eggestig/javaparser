@@ -39,6 +39,10 @@ import com.github.javaparser.printer.concretesyntaxmodel.*;
 import com.github.javaparser.printer.lexicalpreservation.changes.*;
 import com.github.javaparser.utils.LineSeparator;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+
 class LexicalDifferenceCalculator {
 
     /**
@@ -187,7 +191,191 @@ class LexicalDifferenceCalculator {
         return calculatedSyntaxModelForNode(ConcreteSyntaxModel.forClass(node.getClass()), node);
     }
 
+    public void branchCoverage(CsmElement csm, Node node, List<CsmElement> elements, Change change, int[] flags) {
+            if (csm instanceof CsmSequence) {
+                flags[1] = 1;
+                CsmSequence csmSequence = (CsmSequence) csm;
+                csmSequence.getElements().forEach(e -> branchCoverage(e, node, elements, change, flags));
+            } else if (csm instanceof CsmComment) {
+                flags[2] = 1;
+                // nothing to do
+            } else if (csm instanceof CsmSingleReference) {
+                flags[3] = 1;
+                CsmSingleReference csmSingleReference = (CsmSingleReference) csm;
+                Node child;
+                if (change instanceof PropertyChange && ((PropertyChange) change).getProperty() == csmSingleReference.getProperty()) {
+                    flags[4] = 1;
+                    flags[5] = 1;
+                    child = (Node) ((PropertyChange) change).getNewValue();
+                    if (node instanceof LambdaExpr && child instanceof ExpressionStmt) {
+                        flags[6] = 1;
+                        flags[7] = 1;
+                        // Same edge-case as in DefaultPrettyPrinterVisitor.visit(LambdaExpr, Void)
+                        child = ((ExpressionStmt) child).getExpression();
+                    }
+                } else {
+                    child = csmSingleReference.getProperty().getValueAsSingleReference(node);
+                }
+                if (child != null) {
+                    flags[9] = 1;
+                    elements.add(new CsmChild(child));
+                }
+            } else if (csm instanceof CsmNone) {
+                flags[10] = 1;
+                // nothing to do
+            } else if (csm instanceof CsmToken) {
+                flags[11] = 1;
+                elements.add(csm);
+            } else if (csm instanceof CsmOrphanCommentsEnding) {
+                flags[12] = 1;
+                // nothing to do
+            } else if (csm instanceof CsmList) {
+                flags[13] = 1;
+                CsmList csmList = (CsmList) csm;
+                if (csmList.getProperty().isAboutNodes()) {
+                    flags[14] = 1;
+                    Object rawValue = change.getValue(csmList.getProperty(), node);
+                    NodeList<?> nodeList;
+                    if (rawValue instanceof Optional) {
+                        flags[14] = 1;
+                        Optional<?> optional = (Optional<?>) rawValue;
+                        if (optional.isPresent()) {
+                            flags[15] = 1;
+                            if (!(optional.get() instanceof NodeList)) {
+                                flags[16] = 1;
+                                throw new IllegalStateException("Expected NodeList, found " + optional.get().getClass().getCanonicalName());
+                            }
+                            nodeList = (NodeList<?>) optional.get();
+                        } else {
+                            nodeList = new NodeList<>();
+                        }
+                    } else {
+                        if (!(rawValue instanceof NodeList)) {
+                            flags[16] = 1;
+                            throw new IllegalStateException("Expected NodeList, found " + rawValue.getClass().getCanonicalName());
+                        }
+                        nodeList = (NodeList<?>) rawValue;
+                    }
+                    if (!nodeList.isEmpty()) {
+                        flags[17] = 1;
+                        calculatedSyntaxModelForNode(csmList.getPreceeding(), node, elements, change);
+                        for (int i = 0; i < nodeList.size(); i++) {
+                            if (i != 0) {
+                                flags[18] = 1;
+                                calculatedSyntaxModelForNode(csmList.getSeparatorPre(), node, elements, change);
+                            }
+                            elements.add(new CsmChild(nodeList.get(i)));
+                            if (i != (nodeList.size() - 1)) {
+                                flags[19] = 1;
+                                calculatedSyntaxModelForNode(csmList.getSeparatorPost(), node, elements, change);
+                            }
+                        }
+                        calculatedSyntaxModelForNode(csmList.getFollowing(), node, elements, change);
+                    }
+                } else {
+                    Collection<?> collection = (Collection<?>) change.getValue(csmList.getProperty(), node);
+                    if (!collection.isEmpty()) {
+                        flags[20] = 1;
+                        calculatedSyntaxModelForNode(csmList.getPreceeding(), node, elements, change);
+                        boolean first = true;
+                        for (Iterator<?> it = collection.iterator(); it.hasNext(); ) {
+                            if (!first) {
+                                flags[20] = 1;
+                                calculatedSyntaxModelForNode(csmList.getSeparatorPre(), node, elements, change);
+                            }
+                            Object value = it.next();
+                            if (value instanceof Modifier) {
+                                flags[21] = 1;
+                                Modifier modifier = (Modifier) value;
+                                elements.add(new CsmToken(toToken(modifier)));
+                            } else {
+                                throw new UnsupportedOperationException("Not supported value found: " + it.next().getClass().getSimpleName());
+                            }
+                            if (it.hasNext()) {
+                                flags[21] = 1;
+                                calculatedSyntaxModelForNode(csmList.getSeparatorPost(), node, elements, change);
+                            }
+                            first = false;
+                        }
+                        calculatedSyntaxModelForNode(csmList.getFollowing(), node, elements, change);
+                    }
+                }
+            } else if (csm instanceof CsmConditional) {
+                flags[22] = 1;
+                CsmConditional csmConditional = (CsmConditional) csm;
+                boolean satisfied = change.evaluate(csmConditional, node);
+                if (satisfied) {
+                    flags[23] = 1;
+                    calculatedSyntaxModelForNode(csmConditional.getThenElement(), node, elements, change);
+                } else {
+                    calculatedSyntaxModelForNode(csmConditional.getElseElement(), node, elements, change);
+                }
+            } else if (csm instanceof CsmIndent) {
+                flags[24] = 1;
+                elements.add(csm);
+            } else if (csm instanceof CsmUnindent) {
+                flags[25] = 1;
+                elements.add(csm);
+            } else if (csm instanceof CsmAttribute) {
+                flags[26] = 1;
+                CsmAttribute csmAttribute = (CsmAttribute) csm;
+                Object value = change.getValue(csmAttribute.getProperty(), node);
+                String text = value.toString();
+                if (value instanceof Stringable) {
+                    flags[27] = 1;
+                    text = ((Stringable) value).asString();
+                }
+                elements.add(new CsmToken(csmAttribute.getTokenType(node, value.toString(), text), text));
+            } else if ((csm instanceof CsmString) && (node instanceof StringLiteralExpr)) {
+                flags[28] = 1;
+                flags[29] = 1;
+                // fix #2382:
+                // This method calculates the syntax model _after_ the change has been applied.
+                // If the given change is a PropertyChange, the returned model should
+                // contain the new value, otherwise the original/current value should be used.
+                if (change instanceof PropertyChange) {
+                    flags[30] = 1;
+                    elements.add(new CsmToken(GeneratedJavaParserConstants.STRING_LITERAL, "\"" + ((PropertyChange) change).getNewValue() + "\""));
+                } else {
+                    elements.add(new CsmToken(GeneratedJavaParserConstants.STRING_LITERAL, "\"" + ((StringLiteralExpr) node).getValue() + "\""));
+                }
+            } else if ((csm instanceof CsmString) && (node instanceof TextBlockLiteralExpr)) {
+                flags[31] = 1;
+                flags[32] = 1;
+                // Per https://openjdk.java.net/jeps/378#1--Line-terminators, any 'CRLF' and 'CR' are turned into 'LF' before interpreting the text
+                String eol = node.getLineEndingStyle().toString();
+                // FIXME: csm should be CsmTextBlock -- See also #2677
+                if (change instanceof PropertyChange) {
+                    flags[33] = 1;
+                    elements.add(new CsmToken(GeneratedJavaParserConstants.TEXT_BLOCK_LITERAL, "\"\"\"" + eol + ((PropertyChange) change).getNewValue() + "\"\"\""));
+                } else {
+                    elements.add(new CsmToken(GeneratedJavaParserConstants.TEXT_BLOCK_LITERAL, "\"\"\"" + eol + ((TextBlockLiteralExpr) node).getValue() + "\"\"\""));
+                }
+            } else if ((csm instanceof CsmChar) && (node instanceof CharLiteralExpr)) {
+                flags[33] = 1;
+                flags[34] = 1;
+                if (change instanceof PropertyChange) {
+                    flags[35] = 1;
+                    elements.add(new CsmToken(GeneratedJavaParserConstants.CHAR, "'" + ((PropertyChange) change).getNewValue() + "'"));
+                } else {
+                    elements.add(new CsmToken(GeneratedJavaParserConstants.CHAR, "'" + ((CharLiteralExpr) node).getValue() + "'"));
+                }
+            } else if (csm instanceof CsmMix) {
+                flags[36] = 1;
+                CsmMix csmMix = (CsmMix) csm;
+                List<CsmElement> mixElements = new LinkedList<>();
+                csmMix.getElements().forEach(e -> branchCoverage(e, node, mixElements, change, flags));
+                elements.add(new CsmMix(mixElements));
+            } else if (csm instanceof CsmChild) {
+                flags[37] = 1;
+                elements.add(csm);
+            } else {
+                throw new UnsupportedOperationException("Not supported element type: " + csm.getClass().getSimpleName() + " " + csm);
+            }
+    }
+
     private void calculatedSyntaxModelForNode(CsmElement csm, Node node, List<CsmElement> elements, Change change) {
+        
         if (csm instanceof CsmSequence) {
             CsmSequence csmSequence = (CsmSequence) csm;
             csmSequence.getElements().forEach(e -> calculatedSyntaxModelForNode(e, node, elements, change));
@@ -198,10 +386,10 @@ class LexicalDifferenceCalculator {
             Node child;
             if (change instanceof PropertyChange && ((PropertyChange) change).getProperty() == csmSingleReference.getProperty()) {
                 child = (Node) ((PropertyChange) change).getNewValue();
-            	if (node instanceof LambdaExpr && child instanceof ExpressionStmt) {
+                if (node instanceof LambdaExpr && child instanceof ExpressionStmt) {
                     // Same edge-case as in DefaultPrettyPrinterVisitor.visit(LambdaExpr, Void)
-            	    child = ((ExpressionStmt) child).getExpression();
-            	}
+                    child = ((ExpressionStmt) child).getExpression();
+                }
             } else {
                 child = csmSingleReference.getProperty().getValueAsSingleReference(node);
             }
@@ -220,9 +408,12 @@ class LexicalDifferenceCalculator {
                 Object rawValue = change.getValue(csmList.getProperty(), node);
                 NodeList<?> nodeList;
                 if (rawValue instanceof Optional) {
+
                     Optional<?> optional = (Optional<?>) rawValue;
                     if (optional.isPresent()) {
+
                         if (!(optional.get() instanceof NodeList)) {
+
                             throw new IllegalStateException("Expected NodeList, found " + optional.get().getClass().getCanonicalName());
                         }
                         nodeList = (NodeList<?>) optional.get();
@@ -236,13 +427,16 @@ class LexicalDifferenceCalculator {
                     nodeList = (NodeList<?>) rawValue;
                 }
                 if (!nodeList.isEmpty()) {
+
                     calculatedSyntaxModelForNode(csmList.getPreceeding(), node, elements, change);
                     for (int i = 0; i < nodeList.size(); i++) {
                         if (i != 0) {
+
                             calculatedSyntaxModelForNode(csmList.getSeparatorPre(), node, elements, change);
                         }
                         elements.add(new CsmChild(nodeList.get(i)));
                         if (i != (nodeList.size() - 1)) {
+
                             calculatedSyntaxModelForNode(csmList.getSeparatorPost(), node, elements, change);
                         }
                     }
@@ -251,20 +445,24 @@ class LexicalDifferenceCalculator {
             } else {
                 Collection<?> collection = (Collection<?>) change.getValue(csmList.getProperty(), node);
                 if (!collection.isEmpty()) {
+
                     calculatedSyntaxModelForNode(csmList.getPreceeding(), node, elements, change);
                     boolean first = true;
                     for (Iterator<?> it = collection.iterator(); it.hasNext(); ) {
                         if (!first) {
+
                             calculatedSyntaxModelForNode(csmList.getSeparatorPre(), node, elements, change);
                         }
                         Object value = it.next();
                         if (value instanceof Modifier) {
+
                             Modifier modifier = (Modifier) value;
                             elements.add(new CsmToken(toToken(modifier)));
                         } else {
                             throw new UnsupportedOperationException("Not supported value found: " + it.next().getClass().getSimpleName());
                         }
                         if (it.hasNext()) {
+
                             calculatedSyntaxModelForNode(csmList.getSeparatorPost(), node, elements, change);
                         }
                         first = false;
@@ -273,56 +471,69 @@ class LexicalDifferenceCalculator {
                 }
             }
         } else if (csm instanceof CsmConditional) {
+
             CsmConditional csmConditional = (CsmConditional) csm;
             boolean satisfied = change.evaluate(csmConditional, node);
             if (satisfied) {
+
                 calculatedSyntaxModelForNode(csmConditional.getThenElement(), node, elements, change);
             } else {
                 calculatedSyntaxModelForNode(csmConditional.getElseElement(), node, elements, change);
             }
         } else if (csm instanceof CsmIndent) {
+
             elements.add(csm);
         } else if (csm instanceof CsmUnindent) {
+
             elements.add(csm);
         } else if (csm instanceof CsmAttribute) {
+
             CsmAttribute csmAttribute = (CsmAttribute) csm;
             Object value = change.getValue(csmAttribute.getProperty(), node);
             String text = value.toString();
             if (value instanceof Stringable) {
+
                 text = ((Stringable) value).asString();
             }
             elements.add(new CsmToken(csmAttribute.getTokenType(node, value.toString(), text), text));
         } else if ((csm instanceof CsmString) && (node instanceof StringLiteralExpr)) {
+
             // fix #2382:
             // This method calculates the syntax model _after_ the change has been applied.
             // If the given change is a PropertyChange, the returned model should
             // contain the new value, otherwise the original/current value should be used.
             if (change instanceof PropertyChange) {
+
                 elements.add(new CsmToken(GeneratedJavaParserConstants.STRING_LITERAL, "\"" + ((PropertyChange) change).getNewValue() + "\""));
             } else {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.STRING_LITERAL, "\"" + ((StringLiteralExpr) node).getValue() + "\""));
             }
         } else if ((csm instanceof CsmString) && (node instanceof TextBlockLiteralExpr)) {
             // Per https://openjdk.java.net/jeps/378#1--Line-terminators, any 'CRLF' and 'CR' are turned into 'LF' before interpreting the text
-        	String eol = node.getLineEndingStyle().toString();
-        	// FIXME: csm should be CsmTextBlock -- See also #2677
+            String eol = node.getLineEndingStyle().toString();
+            // FIXME: csm should be CsmTextBlock -- See also #2677
             if (change instanceof PropertyChange) {
+
                 elements.add(new CsmToken(GeneratedJavaParserConstants.TEXT_BLOCK_LITERAL, "\"\"\"" + eol + ((PropertyChange) change).getNewValue() + "\"\"\""));
             } else {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.TEXT_BLOCK_LITERAL, "\"\"\"" + eol + ((TextBlockLiteralExpr) node).getValue() + "\"\"\""));
             }
         } else if ((csm instanceof CsmChar) && (node instanceof CharLiteralExpr)) {
+
             if (change instanceof PropertyChange) {
+
                 elements.add(new CsmToken(GeneratedJavaParserConstants.CHAR, "'" + ((PropertyChange) change).getNewValue() + "'"));
             } else {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.CHAR, "'" + ((CharLiteralExpr) node).getValue() + "'"));
             }
         } else if (csm instanceof CsmMix) {
+
             CsmMix csmMix = (CsmMix) csm;
             List<CsmElement> mixElements = new LinkedList<>();
             csmMix.getElements().forEach(e -> calculatedSyntaxModelForNode(e, node, mixElements, change));
             elements.add(new CsmMix(mixElements));
         } else if (csm instanceof CsmChild) {
+
             elements.add(csm);
         } else {
             throw new UnsupportedOperationException("Not supported element type: " + csm.getClass().getSimpleName() + " " + csm);
