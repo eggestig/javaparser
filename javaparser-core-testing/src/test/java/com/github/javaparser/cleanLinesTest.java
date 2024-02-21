@@ -1,10 +1,12 @@
+package com.github.javaparser;
+
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Collections;
 import java.util.List;
 
-class YourClassTest {
+class cleanLinesTest {
 
     @Test
     void testCleanLinesWithAsteriskAndSpace() {
