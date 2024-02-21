@@ -88,7 +88,7 @@ class JavadocParser {
         return string;
     }
 
-    private static List<String> cleanLines(String content) {
+    public static List<String> cleanLines(String content) {
         String[] lines = content.split(SYSTEM_EOL);
         if (lines.length == 0) {
             return Collections.emptyList();
