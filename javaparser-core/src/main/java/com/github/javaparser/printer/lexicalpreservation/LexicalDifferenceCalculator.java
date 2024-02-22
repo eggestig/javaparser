@@ -188,33 +188,126 @@ class LexicalDifferenceCalculator {
     }
 
     private void calculatedSyntaxModelForNode(CsmElement csm, Node node, List<CsmElement> elements, Change change) {
+        if (instanceofCsmSequence(csm, node, elements, change)) {
+            return;
+        }
+        if (instanceofCsmComment(csm)) {
+            return;
+        }
+        if (instanceofCsmSingleReference(csm, node, elements, change)) {
+            return;
+        }
+        if (instanceofCsmNone(csm)) {
+            return;
+        }
+        if (instanceofCsmToken(csm, elements)) {
+            return;
+        }
+        if (instanceofCsmOrphanCommentsEnding(csm)) {
+            return;
+        }
+
+        if (instanceofCsmList(csm, node,  elements, change)) {
+            return;
+        }
+
+        if (instanceofCsmConditional(csm, node, elements,change)) {
+            return;
+        } 
+
+        if (csm instanceof CsmIndent) {
+            elements.add(csm);
+            return;
+        }
+
+        if (csm instanceof CsmUnindent) {
+            elements.add(csm);
+            return;
+        } 
+        if (instanceofCsmAttribute(csm, node, elements, change)) {
+            return;
+        }
+        if (instanceofCsmStringAndStringLiteralExpr(csm, node, elements, change)) {
+            return;
+        }
+
+        if (instanceofCsmStringAndTextBlockLiteralExpr(csm, node, elements, change)) {
+            return;
+        }
+        if (instanceofCsmCharAndCharLiteralExpr(csm, node, elements, change)) {
+            return;
+        }
+        if (instanceofCsmMix(csm, node, elements, change)) {
+            return;
+        }
+        if (instanceofCsmChild(csm, elements)) {
+            return;
+        }
+        throw new UnsupportedOperationException("Not supported element type: " + csm.getClass().getSimpleName() + " " + csm);
+
+    }
+    private boolean instanceofCsmSequence(CsmElement csm, Node node, List<CsmElement> elements, Change change) {
         if (csm instanceof CsmSequence) {
             CsmSequence csmSequence = (CsmSequence) csm;
             csmSequence.getElements().forEach(e -> calculatedSyntaxModelForNode(e, node, elements, change));
-        } else if (csm instanceof CsmComment) {
-            // nothing to do
-        } else if (csm instanceof CsmSingleReference) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmComment(CsmElement csm) {
+        if (csm instanceof CsmComment) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmSingleReference(CsmElement csm, Node node, List<CsmElement> elements, Change change) {
+        if (csm instanceof CsmSingleReference) {
             CsmSingleReference csmSingleReference = (CsmSingleReference) csm;
             Node child;
             if (change instanceof PropertyChange && ((PropertyChange) change).getProperty() == csmSingleReference.getProperty()) {
                 child = (Node) ((PropertyChange) change).getNewValue();
-            	if (node instanceof LambdaExpr && child instanceof ExpressionStmt) {
+                if (node instanceof LambdaExpr && child instanceof ExpressionStmt) {
                     // Same edge-case as in DefaultPrettyPrinterVisitor.visit(LambdaExpr, Void)
-            	    child = ((ExpressionStmt) child).getExpression();
-            	}
+                    child = ((ExpressionStmt) child).getExpression();
+                }
             } else {
                 child = csmSingleReference.getProperty().getValueAsSingleReference(node);
             }
             if (child != null) {
                 elements.add(new CsmChild(child));
             }
-        } else if (csm instanceof CsmNone) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmNone(CsmElement csm) {
+        if (csm instanceof CsmNone) {
             // nothing to do
-        } else if (csm instanceof CsmToken) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmToken(CsmElement csm, List<CsmElement> elements) {
+        if (csm instanceof CsmToken) {
             elements.add(csm);
-        } else if (csm instanceof CsmOrphanCommentsEnding) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmOrphanCommentsEnding(CsmElement csm) {
+        if (csm instanceof CsmOrphanCommentsEnding) {
             // nothing to do
-        } else if (csm instanceof CsmList) {
+            return true;
+        }
+        return false;
+    }
+    private boolean instanceofCsmList(CsmElement csm, Node node, List<CsmElement> elements, Change change){
+         if (csm instanceof CsmList) {
             CsmList csmList = (CsmList) csm;
             if (csmList.getProperty().isAboutNodes()) {
                 Object rawValue = change.getValue(csmList.getProperty(), node);
@@ -272,7 +365,13 @@ class LexicalDifferenceCalculator {
                     calculatedSyntaxModelForNode(csmList.getFollowing(), node, elements, change);
                 }
             }
-        } else if (csm instanceof CsmConditional) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmConditional(CsmElement csm, Node node,  List<CsmElement> elements, Change change){
+         if (csm instanceof CsmConditional) {
             CsmConditional csmConditional = (CsmConditional) csm;
             boolean satisfied = change.evaluate(csmConditional, node);
             if (satisfied) {
@@ -280,11 +379,13 @@ class LexicalDifferenceCalculator {
             } else {
                 calculatedSyntaxModelForNode(csmConditional.getElseElement(), node, elements, change);
             }
-        } else if (csm instanceof CsmIndent) {
-            elements.add(csm);
-        } else if (csm instanceof CsmUnindent) {
-            elements.add(csm);
-        } else if (csm instanceof CsmAttribute) {
+            return true;
+        }
+        return false; 
+    }
+
+    private boolean instanceofCsmAttribute(CsmElement csm, Node node, List<CsmElement> elements, Change change){
+         if (csm instanceof CsmAttribute) {
             CsmAttribute csmAttribute = (CsmAttribute) csm;
             Object value = change.getValue(csmAttribute.getProperty(), node);
             String text = value.toString();
@@ -292,7 +393,13 @@ class LexicalDifferenceCalculator {
                 text = ((Stringable) value).asString();
             }
             elements.add(new CsmToken(csmAttribute.getTokenType(node, value.toString(), text), text));
-        } else if ((csm instanceof CsmString) && (node instanceof StringLiteralExpr)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmStringAndStringLiteralExpr(CsmElement csm, Node node,  List<CsmElement> elements, Change change){
+          if ((csm instanceof CsmString) && (node instanceof StringLiteralExpr)) {
             // fix #2382:
             // This method calculates the syntax model _after_ the change has been applied.
             // If the given change is a PropertyChange, the returned model should
@@ -302,31 +409,62 @@ class LexicalDifferenceCalculator {
             } else {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.STRING_LITERAL, "\"" + ((StringLiteralExpr) node).getValue() + "\""));
             }
-        } else if ((csm instanceof CsmString) && (node instanceof TextBlockLiteralExpr)) {
+            return true;
+        }
+        return false;
+    }
+
+
+    private boolean instanceofCsmStringAndTextBlockLiteralExpr(CsmElement csm, Node node,  List<CsmElement> elements, Change change){
+
+          if ((csm instanceof CsmString) && (node instanceof TextBlockLiteralExpr)) {
             // Per https://openjdk.java.net/jeps/378#1--Line-terminators, any 'CRLF' and 'CR' are turned into 'LF' before interpreting the text
-        	String eol = node.getLineEndingStyle().toString();
-        	// FIXME: csm should be CsmTextBlock -- See also #2677
+            String eol = node.getLineEndingStyle().toString();
+            // FIXME: csm should be CsmTextBlock -- See also #2677
             if (change instanceof PropertyChange) {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.TEXT_BLOCK_LITERAL, "\"\"\"" + eol + ((PropertyChange) change).getNewValue() + "\"\"\""));
             } else {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.TEXT_BLOCK_LITERAL, "\"\"\"" + eol + ((TextBlockLiteralExpr) node).getValue() + "\"\"\""));
             }
-        } else if ((csm instanceof CsmChar) && (node instanceof CharLiteralExpr)) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean instanceofCsmCharAndCharLiteralExpr(CsmElement csm, Node node,  List<CsmElement> elements, Change change){
+
+          if ((csm instanceof CsmChar) && (node instanceof CharLiteralExpr)) {
             if (change instanceof PropertyChange) {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.CHAR, "'" + ((PropertyChange) change).getNewValue() + "'"));
             } else {
                 elements.add(new CsmToken(GeneratedJavaParserConstants.CHAR, "'" + ((CharLiteralExpr) node).getValue() + "'"));
             }
-        } else if (csm instanceof CsmMix) {
+            return true;
+        }
+        return false;
+    } 
+
+
+
+    private boolean instanceofCsmMix(CsmElement csm, Node node, List<CsmElement> elements, Change change){
+
+        if (csm instanceof CsmMix) {
             CsmMix csmMix = (CsmMix) csm;
             List<CsmElement> mixElements = new LinkedList<>();
             csmMix.getElements().forEach(e -> calculatedSyntaxModelForNode(e, node, mixElements, change));
             elements.add(new CsmMix(mixElements));
-        } else if (csm instanceof CsmChild) {
-            elements.add(csm);
-        } else {
-            throw new UnsupportedOperationException("Not supported element type: " + csm.getClass().getSimpleName() + " " + csm);
+            return true;
         }
+        return false;
+    }
+
+
+    private boolean instanceofCsmChild(CsmElement csm, List<CsmElement> elements){
+         if (csm instanceof CsmChild) {
+            elements.add(csm);
+            return true;
+        }
+        return false;
     }
 
     public static int toToken(Modifier modifier) {
