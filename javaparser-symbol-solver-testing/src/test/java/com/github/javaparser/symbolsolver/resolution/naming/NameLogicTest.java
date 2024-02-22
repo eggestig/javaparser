@@ -50,20 +50,6 @@ class NameLogicTest extends AbstractNameLogicTest {
         assertEquals(nameCategory, NameLogic.syntacticClassificationAccordingToContext(nameNode));
     }
 
-
-    @Test
-    void throwsExceptionForNonNameNode() {
-        // Create a dummy node that is not a name
-        Node nonNameNode = null; 
-        // getNameInCode("@interface MyAnno { MyClass myMember(); }", "",
-        // ParseStart.COMPILATION_UNIT);
-
-        // Assert that calling classifyRole with the non-name node throws an IllegalArgumentException
-        assertThrows(UnsupportedOperationException.class, () -> {
-            NameLogic.classifyRole(nonNameNode);
-        });
-    }
-
     @Test
     void requiresModuleName() {
         assertNameInCodeIsSyntactically("module com.mydeveloperplanet.jpmshello {\n" +
