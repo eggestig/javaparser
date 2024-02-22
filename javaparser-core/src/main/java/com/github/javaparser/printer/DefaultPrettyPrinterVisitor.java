@@ -24,6 +24,9 @@ import static com.github.javaparser.utils.PositionUtils.sortByBeginPosition;
 import static com.github.javaparser.utils.Utils.*;
 import static java.util.stream.Collectors.joining;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
@@ -55,6 +58,8 @@ import com.github.javaparser.printer.configuration.imports.DefaultImportOrdering
  * Outputs the AST as formatted Java source code.
  */
 public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
+
+    static int[] coverage = new int[14];
 
 	private static Pattern RTRIM = Pattern.compile("\\s+$");
 
@@ -825,6 +830,23 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
         printer.print("super");
     }
 
+    private void writeToFile(int[] flags) {
+        // Create a StringBuilder to store the flags
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < flags.length; i++) {
+            sb.append(flags[i]);
+        }
+        // Create a buffer writer to write the flags to a file
+        BufferedWriter writer = null;
+        try {
+            writer = new BufferedWriter(new FileWriter("flags_pretty.txt"));
+            writer.write(sb.toString());
+            writer.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+ 
     @Override
     public void visit(final MethodCallExpr n, final Void arg) {
         printOrphanCommentsBeforeThisChildNode(n);
@@ -836,11 +858,15 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
         AtomicBoolean columnAlignFirstMethodChain = new AtomicBoolean();
         if (getOption(ConfigOption.COLUMN_ALIGN_FIRST_METHOD_CHAIN).isPresent()) {
             // pick the kind of expressions where vertically aligning method calls is okay.
+            coverage[0] = 1;
+            writeToFile(coverage);
             if (n.findAncestor(Statement.class).map(p -> p.isReturnStmt() || p.isThrowStmt() || p.isAssertStmt() || p.isExpressionStmt()).orElse(false)) {
+                coverage[1] = 1;
                 // search for first parent that does not have its child as scope
                 Node c = n;
                 Optional<Node> p = c.getParentNode();
                 while (p.isPresent() && p.filter(NodeWithTraversableScope.class::isInstance).map(NodeWithTraversableScope.class::cast).flatMap(NodeWithTraversableScope::traverseScope).map(c::equals).orElse(false)) {
+                    coverage[2] = 1;
                     c = p.get();
                     p = c.getParentNode();
                 }
@@ -852,10 +878,14 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
         // this means we do not start reindenting for alignment or we undo it
         AtomicBoolean lastMethodInCallChain = new AtomicBoolean(true);
         if (columnAlignFirstMethodChain.get()) {
+            coverage[3] = 1;
             Node node = n;
             while (node.getParentNode().filter(NodeWithTraversableScope.class::isInstance).map(NodeWithTraversableScope.class::cast).flatMap(NodeWithTraversableScope::traverseScope).map(node::equals).orElse(false)) {
+                coverage[4] = 1;
+                writeToFile(coverage);
                 node = node.getParentNode().orElseThrow(AssertionError::new);
                 if (node instanceof MethodCallExpr) {
+                    coverage[5] = 1;
                     lastMethodInCallChain.set(false);
                     break;
                 }
@@ -865,10 +895,13 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
         // this means that we probably started reindenting for alignment there
         AtomicBoolean methodCallWithScopeInScope = new AtomicBoolean();
         if (columnAlignFirstMethodChain.get()) {
+            coverage[7] = 1;
             Optional<Expression> s = n.getScope();
             while (s.filter(NodeWithTraversableScope.class::isInstance).isPresent()) {
+                coverage[8] = 1;
                 Optional<Expression> parentScope = s.map(NodeWithTraversableScope.class::cast).flatMap(NodeWithTraversableScope::traverseScope);
                 if (s.filter(MethodCallExpr.class::isInstance).isPresent() && parentScope.isPresent()) {
+                    coverage[9] = 1;
                     methodCallWithScopeInScope.set(true);
                     break;
                 }
@@ -880,7 +913,9 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
         n.getScope().ifPresent(scope -> {
             scope.accept(this, arg);
             if (columnAlignFirstMethodChain.get()) {
+                coverage[10] = 1;
                 if (methodCallWithScopeInScope.get()) {
+                    coverage[11] = 1;
                     /* We're a method call on the result of something (method call, property access, ...) that is not stand alone,
                        and not the first one with scope, like:
                        we're x() in a.b().x(), or in a=b().c[15].d.e().x().
@@ -889,6 +924,7 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
                        That means we will align to that "." when we start a new line: */
                     printer.println();
                 } else if (!lastMethodInCallChain.get()) {
+                    coverage[12] = 1;
                     /* We're the first method call on the result of something in the chain (method call, property access, ...),
                        but we are not at the same time the last method call in that chain, like:
                        we're x() in a().x().y(), or in Long.x().y.z(). That means we get to dictate the indent of following method
@@ -905,9 +941,11 @@ public class DefaultPrettyPrinterVisitor implements VoidVisitor<Void> {
         printArguments(n.getArguments(), arg);
         printer.unindent();
         if (columnAlignFirstMethodChain.get() && methodCallWithScopeInScope.get() && lastMethodInCallChain.get()) {
+            coverage[13] = 1;
             // undo the aligning after the arguments of the last method call are printed
             printer.reindentToPreviousLevel();
         }
+        writeToFile(coverage);
     }
 
     @Override
