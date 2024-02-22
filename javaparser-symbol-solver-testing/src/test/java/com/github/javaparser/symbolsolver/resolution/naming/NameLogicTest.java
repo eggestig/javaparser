@@ -19,6 +19,8 @@
  * GNU Lesser General Public License for more details.
  */
 
+ 
+
 package com.github.javaparser.symbolsolver.resolution.naming;
 
 import com.github.javaparser.ParseStart;
@@ -37,6 +39,8 @@ import static com.github.javaparser.symbolsolver.resolution.naming.NameRole.DECL
 import static com.github.javaparser.symbolsolver.resolution.naming.NameRole.REFERENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 
 class NameLogicTest extends AbstractNameLogicTest {
 
