@@ -21,7 +21,13 @@
 
 package com.github.javaparser.resolution.logic;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -30,10 +36,19 @@ import java.util.stream.Collectors;
 import com.github.javaparser.resolution.MethodAmbiguityException;
 import com.github.javaparser.resolution.MethodUsage;
 import com.github.javaparser.resolution.TypeSolver;
-import com.github.javaparser.resolution.declarations.*;
+import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedMethodLikeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedParameterDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedTypeDeclaration;
+import com.github.javaparser.resolution.declarations.ResolvedTypeParameterDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.resolution.model.typesystem.ReferenceTypeImpl;
-import com.github.javaparser.resolution.types.*;
+import com.github.javaparser.resolution.types.ResolvedArrayType;
+import com.github.javaparser.resolution.types.ResolvedPrimitiveType;
+import com.github.javaparser.resolution.types.ResolvedReferenceType;
+import com.github.javaparser.resolution.types.ResolvedType;
+import com.github.javaparser.resolution.types.ResolvedTypeVariable;
+import com.github.javaparser.resolution.types.ResolvedWildcard;
 
 /**
  * @author Federico Tomassetti
@@ -448,99 +463,148 @@ public class MethodResolutionLogic {
         for (int i = 0; i < needleParameterCount; i++) {
             ResolvedType actualArgumentType = needleParameterTypes.get(i);
 
-            ResolvedType expectedArgumentType;
-            boolean reachedVariadicParam = methodIsDeclaredWithVariadicParameter && i >= lastMethodUsageArgumentIndex;
-            if (!reachedVariadicParam) {
-                // Not yet reached the variadic parameters -- the expected type is just whatever is at that position.
-                expectedArgumentType = methodUsage.getParamType(i);
-            } else {
-                // We have reached the variadic parameters -- the expected type is the type of the last declared parameter.
-                expectedArgumentType = methodUsage.getParamType(lastMethodUsageArgumentIndex);
-                // Note that the given variadic value might be an array - if so, use the array's component type rather.
-                // This is only valid if ONE argument has been given to the vararg parameter.
-                // Example: {@code void test(String... s) {}} and {@code test(stringArray)} -- {@code String... is assignable by stringArray}
-                // Example: {@code void test(String[]... s) {}} and {@code test(stringArrayArray)} -- {@code String[]... is assignable by stringArrayArray}
-                boolean argumentIsArray = (needleParameterCount == countOfMethodUsageArgumentsPassed) && expectedArgumentType.isAssignableBy(actualArgumentType);
-                if (!argumentIsArray) {
-                    // Get the component type of the declared parameter type.
-                    expectedArgumentType = expectedArgumentType.asArrayType().getComponentType();
-                }
-            }
+            ResolvedType expectedArgumentType = getExpectedArgumentType(methodUsage, needleParameterTypes, i, actualArgumentType);
 
             // Consider type parameters directly on the method declaration, and ALSO on the enclosing type (e.g. a class)
             List<ResolvedTypeParameterDeclaration> typeParameters = methodUsage.getDeclaration().getTypeParameters();
             typeParameters.addAll(methodUsage.declaringType().getTypeParameters());
 
             ResolvedType expectedTypeWithoutSubstitutions = expectedArgumentType;
-            ResolvedType expectedTypeWithInference = expectedArgumentType;
-            Map<ResolvedTypeParameterDeclaration, ResolvedType> derivedValues = new HashMap<>();
-
-            // For each declared parameter, infer the types that will replace generics (type parameters)
-            for (int j = 0; j < countOfMethodUsageArgumentsPassed; j++) {
-                ResolvedParameterDeclaration parameter = methodUsage.getDeclaration().getParam(j);
-                ResolvedType parameterType = parameter.getType();
-                if (parameter.isVariadic()) {
-                    // Don't continue if a vararg parameter is reached and there are no arguments left
-                    if (needleParameterCount == j) {
-                        break;
-                    }
-                    parameterType = parameterType.asArrayType().getComponentType();
-                }
-                inferTypes(needleParameterTypes.get(j), parameterType, derivedValues);
-            }
-
-            for (Map.Entry<ResolvedTypeParameterDeclaration, ResolvedType> entry : derivedValues.entrySet()) {
-                ResolvedTypeParameterDeclaration tp = entry.getKey();
-                expectedTypeWithInference = expectedTypeWithInference.replaceTypeVariables(tp, entry.getValue());
-            }
+            ResolvedType expectedTypeWithInference = inferParameterTypesAndReplaceTypeVariables(methodUsage, expectedArgumentType, needleParameterTypes);
 
             // Consider cases where type variables can be replaced (e.g. add(E element) vs add(String element))
-            for (ResolvedTypeParameterDeclaration tp : typeParameters) {
-                if (tp.getBounds().isEmpty()) {
-                    //expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp.getName(), new ReferenceTypeUsageImpl(typeSolver.solveType(JAVA_LANG_OBJECT), typeSolver));
-                    expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp, ResolvedWildcard.extendsBound(new ReferenceTypeImpl(typeSolver.solveType(JAVA_LANG_OBJECT))));
-                } else if (tp.getBounds().size() == 1) {
-                    ResolvedTypeParameterDeclaration.Bound bound = tp.getBounds().get(0);
-                    if (bound.isExtends()) {
-                        //expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp.getName(), bound.getType());
-                        expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp, ResolvedWildcard.extendsBound(bound.getType()));
-                    } else {
-                        //expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp.getName(), new ReferenceTypeUsageImpl(typeSolver.solveType(JAVA_LANG_OBJECT), typeSolver));
-                        expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp, ResolvedWildcard.superBound(bound.getType()));
-                    }
-                } else {
-                    throw new UnsupportedOperationException();
-                }
-            }
+            expectedArgumentType = handleTypeVariableReplacementCases(methodUsage, expectedArgumentType, typeSolver);
 
             // Consider cases where type variables involve bounds e.g. super/extends
-            ResolvedType expectedTypeWithSubstitutions = expectedTypeWithoutSubstitutions;
-            for (ResolvedTypeParameterDeclaration tp : typeParameters) {
-                if (tp.getBounds().isEmpty()) {
-                    expectedTypeWithSubstitutions = expectedTypeWithSubstitutions.replaceTypeVariables(tp, new ReferenceTypeImpl(typeSolver.solveType(JAVA_LANG_OBJECT)));
-                } else if (tp.getBounds().size() == 1) {
-                    ResolvedTypeParameterDeclaration.Bound bound = tp.getBounds().get(0);
-                    if (bound.isExtends()) {
-                        expectedTypeWithSubstitutions = expectedTypeWithSubstitutions.replaceTypeVariables(tp, bound.getType());
-                    } else {
-                        expectedTypeWithSubstitutions = expectedTypeWithSubstitutions.replaceTypeVariables(tp, new ReferenceTypeImpl(typeSolver.solveType(JAVA_LANG_OBJECT)));
-                    }
-                } else {
-                    throw new UnsupportedOperationException();
-                }
-            }
+            ResolvedType expectedTypeWithSubstitutions = handleTypeVariableBoundsCases(methodUsage, expectedTypeWithoutSubstitutions, typeSolver);
 
             // If the given argument still isn't applicable even after considering type arguments/generics, this is not a match.
-            if (!expectedArgumentType.isAssignableBy(actualArgumentType)
-                    && !expectedTypeWithSubstitutions.isAssignableBy(actualArgumentType)
-                    && !expectedTypeWithInference.isAssignableBy(actualArgumentType)
-                    && !expectedTypeWithoutSubstitutions.isAssignableBy(actualArgumentType)) {
+
+            if(!isAssignable(expectedArgumentType, expectedTypeWithSubstitutions, expectedTypeWithInference, expectedTypeWithoutSubstitutions, actualArgumentType)) {
                 return false;
             }
         }
 
         // If the checks above haven't failed, then we've found a match.
         return true;
+    }
+
+    // Private functions
+    private static ResolvedType getExpectedArgumentType(MethodUsage methodUsage, List<ResolvedType> needleParameterTypes, int idx, ResolvedType actualArgumentType) {
+        int countOfMethodUsageArgumentsPassed = methodUsage.getNoParams();
+        int lastMethodUsageArgumentIndex = getLastParameterIndex(countOfMethodUsageArgumentsPassed);
+        int needleParameterCount = needleParameterTypes.size();
+
+        ResolvedType expectedArgumentType;
+        
+        boolean reachedVariadicParam = methodUsage.getDeclaration().hasVariadicParameter() && idx >= lastMethodUsageArgumentIndex;
+        if (!reachedVariadicParam) {
+            // Not yet reached the variadic parameters -- the expected type is just whatever is at that position.
+            return methodUsage.getParamType(idx);
+        }
+
+        // We have reached the variadic parameters -- the expected type is the type of the last declared parameter.
+        expectedArgumentType = methodUsage.getParamType(lastMethodUsageArgumentIndex);
+        // Note that the given variadic value might be an array - if so, use the array's component type rather.
+        // This is only valid if ONE argument has been given to the vararg parameter.
+        // Example: {@code void test(String... s) {}} and {@code test(stringArray)} -- {@code String... is assignable by stringArray}
+        // Example: {@code void test(String[]... s) {}} and {@code test(stringArrayArray)} -- {@code String[]... is assignable by stringArrayArray}
+        boolean argumentIsArray = (needleParameterCount == countOfMethodUsageArgumentsPassed) && expectedArgumentType.isAssignableBy(actualArgumentType);
+        if (!argumentIsArray) {
+            // Get the component type of the declared parameter type.
+            expectedArgumentType = expectedArgumentType.asArrayType().getComponentType();
+        }
+
+        return expectedArgumentType;
+    }
+
+    private static ResolvedType inferParameterTypesAndReplaceTypeVariables(MethodUsage methodUsage, ResolvedType expectedArgumentType, List<ResolvedType> needleParameterTypes) {
+        int countOfMethodUsageArgumentsPassed = methodUsage.getNoParams();
+        int needleParameterCount = needleParameterTypes.size();
+
+        ResolvedType expectedTypeWithInference = expectedArgumentType;
+
+        Map<ResolvedTypeParameterDeclaration, ResolvedType> derivedValues = new HashMap<>();
+
+        // For each declared parameter, infer the types that will replace generics (type parameters)
+        for (int j = 0; j < countOfMethodUsageArgumentsPassed; j++) {
+            ResolvedParameterDeclaration parameter = methodUsage.getDeclaration().getParam(j);
+            ResolvedType parameterType = parameter.getType();
+            if (parameter.isVariadic()) {
+                // Don't continue if a vararg parameter is reached and there are no arguments left
+                if (needleParameterCount == j) {
+                    break;
+                }
+                parameterType = parameterType.asArrayType().getComponentType();
+            }
+            inferTypes(needleParameterTypes.get(j), parameterType, derivedValues);
+        }
+
+        for (Map.Entry<ResolvedTypeParameterDeclaration, ResolvedType> entry : derivedValues.entrySet()) {
+            ResolvedTypeParameterDeclaration tp = entry.getKey();
+            expectedTypeWithInference = expectedTypeWithInference.replaceTypeVariables(tp, entry.getValue());
+        }
+
+        return expectedTypeWithInference;
+    }
+
+    private static ResolvedType handleTypeVariableReplacementCases(MethodUsage methodUsage, ResolvedType expectedArgumentTypeInput, TypeSolver typeSolver) {
+        List<ResolvedTypeParameterDeclaration> typeParameters = methodUsage.getDeclaration().getTypeParameters();
+
+        ResolvedType expectedArgumentType = expectedArgumentTypeInput;
+
+        for (ResolvedTypeParameterDeclaration tp : typeParameters) {
+            if (tp.getBounds().isEmpty()) {
+                //expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp.getName(), new ReferenceTypeUsageImpl(typeSolver.solveType(JAVA_LANG_OBJECT), typeSolver));
+                expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp, ResolvedWildcard.extendsBound(new ReferenceTypeImpl(typeSolver.solveType(JAVA_LANG_OBJECT))));
+            } else if (tp.getBounds().size() == 1) {
+                ResolvedTypeParameterDeclaration.Bound bound = tp.getBounds().get(0);
+                if (bound.isExtends()) {
+                    //expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp.getName(), bound.getType());
+                    expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp, ResolvedWildcard.extendsBound(bound.getType()));
+                } else {
+                    //expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp.getName(), new ReferenceTypeUsageImpl(typeSolver.solveType(JAVA_LANG_OBJECT), typeSolver));
+                    expectedArgumentType = expectedArgumentType.replaceTypeVariables(tp, ResolvedWildcard.superBound(bound.getType()));
+                }
+            } else {
+                throw new UnsupportedOperationException();
+            }
+        }
+        
+        return expectedArgumentType;
+    }
+
+    private static ResolvedType handleTypeVariableBoundsCases(MethodUsage methodUsage, ResolvedType expectedTypeWithoutSubstitutions, TypeSolver typeSolver) {
+        List<ResolvedTypeParameterDeclaration> typeParameters = methodUsage.getDeclaration().getTypeParameters();
+
+        ResolvedType expectedTypeWithSubstitutions = expectedTypeWithoutSubstitutions;
+        for (ResolvedTypeParameterDeclaration tp : typeParameters) {
+            if (tp.getBounds().isEmpty()) {
+                expectedTypeWithSubstitutions = expectedTypeWithSubstitutions.replaceTypeVariables(tp, new ReferenceTypeImpl(typeSolver.solveType(JAVA_LANG_OBJECT)));
+            } else if (tp.getBounds().size() == 1) {
+                ResolvedTypeParameterDeclaration.Bound bound = tp.getBounds().get(0);
+                if (bound.isExtends()) {
+                    expectedTypeWithSubstitutions = expectedTypeWithSubstitutions.replaceTypeVariables(tp, bound.getType());
+                } else {
+                    expectedTypeWithSubstitutions = expectedTypeWithSubstitutions.replaceTypeVariables(tp, new ReferenceTypeImpl(typeSolver.solveType(JAVA_LANG_OBJECT)));
+                }
+            } else {
+                throw new UnsupportedOperationException();
+            }
+        }
+
+        return expectedTypeWithSubstitutions;
+    }
+    
+    private static boolean isAssignable(ResolvedType expectedArgumentType, 
+                                        ResolvedType expectedTypeWithSubstitutions, 
+                                        ResolvedType expectedTypeWithInference, 
+                                        ResolvedType expectedTypeWithoutSubstitutions, 
+                                        ResolvedType actualArgumentType) {
+        return expectedArgumentType.isAssignableBy(actualArgumentType)
+                || expectedTypeWithSubstitutions.isAssignableBy(actualArgumentType)
+                || expectedTypeWithInference.isAssignableBy(actualArgumentType)
+                || expectedTypeWithoutSubstitutions.isAssignableBy(actualArgumentType);
     }
 
     /**
