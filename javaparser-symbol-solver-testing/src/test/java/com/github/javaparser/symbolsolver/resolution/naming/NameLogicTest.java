@@ -19,6 +19,8 @@
  * GNU Lesser General Public License for more details.
  */
 
+ 
+
 package com.github.javaparser.symbolsolver.resolution.naming;
 
 import com.github.javaparser.ParseStart;
@@ -37,6 +39,8 @@ import static com.github.javaparser.symbolsolver.resolution.naming.NameRole.DECL
 import static com.github.javaparser.symbolsolver.resolution.naming.NameRole.REFERENCE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
 
 class NameLogicTest extends AbstractNameLogicTest {
 
@@ -44,6 +48,20 @@ class NameLogicTest extends AbstractNameLogicTest {
     private void assertNameInCodeIsSyntactically(String code, String name, NameCategory nameCategory, ParseStart parseStart) {
         Node nameNode = getNameInCode(code, name, parseStart);
         assertEquals(nameCategory, NameLogic.syntacticClassificationAccordingToContext(nameNode));
+    }
+
+
+    @Test
+    void throwsExceptionForNonNameNode() {
+        // Create a dummy node that is not a name
+        Node nonNameNode = null; 
+        // getNameInCode("@interface MyAnno { MyClass myMember(); }", "",
+        // ParseStart.COMPILATION_UNIT);
+
+        // Assert that calling classifyRole with the non-name node throws an IllegalArgumentException
+        assertThrows(UnsupportedOperationException.class, () -> {
+            NameLogic.classifyRole(nonNameNode);
+        });
     }
 
     @Test
