@@ -244,39 +244,31 @@ class class3 implements ResolvedReferenceTypeDeclaration{
 
 class IsAssignableMatchTypeParametersMatchingQNameBranchCovertest {
 
-    //test for when the Type Parameter Sizes unequal
     @Test
-    void isAnswerWithTrue() {
+    void shouldAnswerWithTrue() {
         assertTrue(true);
     }    
 
     //test for the same param array
     @Test
     void testExpectedParamIsArray(){
-        myclass expectedType = new myclass();  // Example with 2 type parameters
-        myclass actualType = new myclass();    // Example with 2 type parameters
+        myclass expectedType = new myclass(); 
+        myclass actualType = new myclass(); 
         Map<String, ResolvedType> matchedParameters = new HashMap<>();
         try{assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));}
         catch(Exception e){
             return;}
         
     }
-
+    // test for the Reference Variable
     @Test
     void testExpectedParamIsReferenceVariable(){
-        myclass expectedType = new myclass();  // Example with 2 type parameters
-        myclass actualType = new myclass();    // Example with 2 type parameters
+        myclass expectedType = new myclass();  
+        myclass actualType = new myclass();   
         Map<String, ResolvedType> matchedParameters = new HashMap<>();
         assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
     }
 
-    // @Test
-    // void testDiffTypeReference(){
-    //     myclass expectedType = new myclass();  // Example with 2 type parameters
-    //     myclass actualType = new myclass();    // Example with 2 type parameters
-    //     Map<String, ResolvedType> matchedParameters = new HashMap<>();
-    //     assertFalse(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
-
-    // }
+   
 
 }
