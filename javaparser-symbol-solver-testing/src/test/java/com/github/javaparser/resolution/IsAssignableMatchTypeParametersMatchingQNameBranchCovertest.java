@@ -1,11 +1,9 @@
-
-package com.github.javaparser;
+package com.github.javaparser.resolution;
 
 import com.github.javaparser.resolution.types.ResolvedReferenceType;
 import com.github.javaparser.resolution.types.ResolvedType;
 import com.github.javaparser.resolution.types.ResolvedTypeTransformer;
 import com.github.javaparser.resolution.types.parametrization.ResolvedTypeParametersMap;
-import com.github.javaparser.resolution.MethodUsage;
 import com.github.javaparser.resolution.declarations.ResolvedConstructorDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedFieldDeclaration;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
@@ -13,11 +11,8 @@ import com.github.javaparser.resolution.declarations.ResolvedReferenceTypeDeclar
 import com.github.javaparser.resolution.declarations.ResolvedTypeParameterDeclaration;
 import com.github.javaparser.resolution.logic.MethodResolutionLogic;
 
-import org.checkerframework.checker.units.qual.t;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.booleanThat;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,21 +25,35 @@ class myclass implements ResolvedType{
     public myclass(){
         int a = 1;
     }
+    @Override
+    public boolean isReferenceType(){
+        return true;
+    }
+    @Override
+    public String describe() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'describe'");
+    }
+
+    @Override
+    public boolean isAssignableBy(ResolvedType other) {
+        return true;
+    }
+
+    @Override
+    public ResolvedReferenceType asReferenceType() {
+        return new class2(new class3());
+    }
+
+}
+
+class myclass2 implements ResolvedType{
+    public myclass2(){
+        int a = 1;
+    }
     
     @Override
     public boolean isTypeVariable(){
-        return true;
-    }
-    @Override
-    public boolean isArray(){
-        return true;
-    }
-    @Override
-    public boolean isPrimitive(){
-        return true;
-    }
-    @Override
-    public boolean isReference(){
         return true;
     }
     @Override
@@ -71,6 +80,7 @@ class myclass implements ResolvedType{
     }
 
 }
+
 class class2 extends ResolvedReferenceType{
 
     public class2(ResolvedReferenceTypeDeclaration typeDeclaration) {
@@ -255,16 +265,14 @@ class IsAssignableMatchTypeParametersMatchingQNameBranchCovertest {
         myclass expectedType = new myclass(); 
         myclass actualType = new myclass(); 
         Map<String, ResolvedType> matchedParameters = new HashMap<>();
-        try{assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));}
-        catch(Exception e){
-            return;}
-        
+        assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
+        return;
     }
     // test for the Reference Variable
     @Test
     void testExpectedParamIsReferenceVariable(){
-        myclass expectedType = new myclass();  
-        myclass actualType = new myclass();   
+        myclass2 expectedType = new myclass2();  
+        myclass2 actualType = new myclass2();   
         Map<String, ResolvedType> matchedParameters = new HashMap<>();
         assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
     }
