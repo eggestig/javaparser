@@ -81,6 +81,75 @@ class myclass2 implements ResolvedType{
 
 }
 
+class type3 implements ResolvedType{
+    public type3(){
+        int a = 1;
+    }
+    
+    @Override
+    public boolean isPrimitive(){
+        return true;
+    }
+    
+    @Override
+    public boolean isReferenceType(){
+        return true;
+    }
+    
+
+  
+    @Override
+    public String describe() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'describe'");
+    }
+
+    @Override
+    public boolean isAssignableBy(ResolvedType other) {
+        return true;
+    }
+
+    @Override
+    public ResolvedReferenceType asReferenceType() {
+        return new class2(new class3());
+    }
+
+}
+
+class type4 implements ResolvedType{
+    public type4(){
+        int a = 1;
+    }
+    
+    @Override
+    public boolean isVoid(){
+        return true;
+    }
+    @Override
+    public boolean isReferenceType(){
+        return true;
+    }
+    
+
+  
+    @Override
+    public String describe() {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'describe'");
+    }
+
+    @Override
+    public boolean isAssignableBy(ResolvedType other) {
+        return true;
+    }
+
+    @Override
+    public ResolvedReferenceType asReferenceType() {
+        return new class2(new class3());
+    }
+
+}
+
 class class2 extends ResolvedReferenceType{
 
     public class2(ResolvedReferenceTypeDeclaration typeDeclaration) {
@@ -273,6 +342,22 @@ class IsAssignableMatchTypeParametersMatchingQNameBranchCovertest {
     void testExpectedParamIsReferenceVariable(){
         myclass2 expectedType = new myclass2();  
         myclass2 actualType = new myclass2();   
+        Map<String, ResolvedType> matchedParameters = new HashMap<>();
+        assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
+    }
+
+    @Test
+    void testExpectedParamIsPrimitiveVariable(){
+        type3 expectedType = new type3();  
+        type3 actualType = new type3();   
+        Map<String, ResolvedType> matchedParameters = new HashMap<>();
+        assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
+    }
+
+    @Test
+    void testExpectedParamIsOtherVariable(){
+        type4 expectedType = new type4();  
+        type4 actualType = new type4();   
         Map<String, ResolvedType> matchedParameters = new HashMap<>();
         assertTrue(MethodResolutionLogic.isAssignableMatchTypeParameters(expectedType, actualType, matchedParameters));
     }
